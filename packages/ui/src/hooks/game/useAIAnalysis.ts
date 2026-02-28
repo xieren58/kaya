@@ -142,9 +142,9 @@ const PREDEFINED_MODELS: Array<{
       predefinedId: id,
       baseModelIndex: modelIndex,
       quantization: variant.quantization,
-      // Only apply recommended/isDefault to the first variant (fp32)
-      ...(variantIndex === 0 && model.recommended ? { recommended: true } : {}),
-      ...(variantIndex === 0 && model.isDefault ? { isDefault: true } : {}),
+      // Apply recommended/isDefault to fp16 variant (best balance of quality and GPU memory)
+      ...(variantIndex === 1 && model.recommended ? { recommended: true } : {}),
+      ...(variantIndex === 1 && model.isDefault ? { isDefault: true } : {}),
     };
   })
 );
@@ -160,12 +160,15 @@ function isTauriDesktop(): boolean {
 }
 
 // Get default backend based on environment
-function getDefaultBackend(): 'native' | 'wasm' {
+function getDefaultBackend(): 'native' | 'webgpu' | 'wasm' {
   // In Tauri desktop, default to native for best performance
   if (isTauriDesktop()) {
     return 'native';
   }
-  // In web, default to WASM (more stable than WebGPU)
+  // In web, default to WebGPU if available for GPU acceleration
+  if (isWebGPUAvailable()) {
+    return 'webgpu';
+  }
   return 'wasm';
 }
 
@@ -176,6 +179,8 @@ const DEFAULT_AI_SETTINGS: AISettings = {
   // Default depends on environment - set dynamically
   backend: 'wasm', // This will be overridden by loadAISettings
   saveAnalysisToSgf: true,
+  numVisits: 1, // Policy-only by default (fastest); increase for MCTS tree search
+  webgpuBatchSize: 4, // Default batch size for WebGPU graph capture
 };
 
 // Load AI settings from localStorage
@@ -191,12 +196,16 @@ function loadAISettings(): AISettings {
       // Validate backend - if GPU was selected but not available, fallback to WASM
       let backend = parsed.backend;
 
-      // 'native' and 'native-cpu' are only valid in Tauri desktop app
-      // If we're on web and backend is 'native' or 'native-cpu', fallback to 'wasm'
-      if ((backend === 'native' || backend === 'native-cpu') && !isTauri) {
-        console.log('[AI Settings] Native backend not available on web, falling back to wasm');
+      // 'native', 'native-cpu', and 'pytorch' are only valid in Tauri desktop app
+      // If we're on web and backend is one of these, fallback to 'wasm'
+      if ((backend === 'native' || backend === 'native-cpu' || backend === 'pytorch') && !isTauri) {
+        console.log(
+          '[AI Settings] Native/PyTorch backend not available on web, falling back to wasm'
+        );
         backend = 'wasm';
-      } else if (!['native', 'native-cpu', 'webgpu', 'webgl', 'wasm'].includes(backend)) {
+      } else if (
+        !['native', 'native-cpu', 'pytorch', 'webgpu', 'webnn', 'webgl', 'wasm'].includes(backend)
+      ) {
         backend = defaultBackend;
       } else if (backend === 'webgpu' && !hasGPU) {
         backend = 'wasm'; // GPU not available, fallback
@@ -218,6 +227,16 @@ function loadAISettings(): AISettings {
           typeof parsed.saveAnalysisToSgf === 'boolean'
             ? parsed.saveAnalysisToSgf
             : DEFAULT_AI_SETTINGS.saveAnalysisToSgf,
+        numVisits:
+          typeof parsed.numVisits === 'number' && parsed.numVisits >= 1 && parsed.numVisits <= 400
+            ? Math.round(parsed.numVisits)
+            : DEFAULT_AI_SETTINGS.numVisits,
+        webgpuBatchSize:
+          typeof parsed.webgpuBatchSize === 'number' &&
+          parsed.webgpuBatchSize >= 1 &&
+          parsed.webgpuBatchSize <= 16
+            ? Math.round(parsed.webgpuBatchSize)
+            : DEFAULT_AI_SETTINGS.webgpuBatchSize,
       };
     }
   } catch (e) {

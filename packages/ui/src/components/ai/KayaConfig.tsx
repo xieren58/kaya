@@ -74,6 +74,25 @@ export const KayaConfig: React.FC = () => {
     [modelLibrary]
   );
 
+  // Check if PyTorch GPU engine is available (Linux with ROCm/CUDA only)
+  const [pytorchAvailable, setPytorchAvailable] = useState(false);
+  // Check WebNN availability (Chrome with navigator.ml)
+  const [webnnAvailable, setWebnnAvailable] = useState(false);
+  useEffect(() => {
+    if (isTauriApp()) {
+      // Dynamic import to avoid loading in non-Tauri environments
+      import('@kaya/ai-engine/pytorch-tauri-engine')
+        .then(({ isPyTorchAvailable }) => {
+          isPyTorchAvailable().then(setPytorchAvailable);
+        })
+        .catch(() => {});
+    }
+    // Check WebNN
+    if (typeof navigator !== 'undefined' && 'ml' in navigator) {
+      setWebnnAvailable(true);
+    }
+  }, []);
+
   // Track if user has manually interacted with expand/collapse
   const hasUserInteracted = useRef(false);
 
@@ -171,11 +190,11 @@ export const KayaConfig: React.FC = () => {
   // Check if any model is downloaded
   const hasAnyDownloaded = modelLibrary.some(m => m.isDownloaded);
 
-  // Get the recommended model's default variant ID (fp32 for full compatibility)
+  // Get the recommended model's default variant ID (fp16 for best GPU memory efficiency)
   const recommendedModelId = useMemo(() => {
     const recommendedBase = BASE_MODELS.findIndex(m => m.recommended);
     if (recommendedBase >= 0) {
-      return getModelId(recommendedBase, 'fp32');
+      return getModelId(recommendedBase, 'fp16');
     }
     return null;
   }, []);
@@ -474,13 +493,40 @@ export const KayaConfig: React.FC = () => {
                   <option value="native-cpu">{t('aiConfig.nativeCpu')}</option>
                 </>
               )}
+              {/* PyTorch GPU: fastest, Linux with ROCm/CUDA only */}
+              {pytorchAvailable && <option value="pytorch">{t('aiConfig.pytorch')}</option>}
               {/* Only show WebGPU if supported */}
               {typeof navigator !== 'undefined' && (navigator as any).gpu && (
                 <option value="webgpu">{t('aiConfig.webgpu')}</option>
               )}
+              {/* WebNN: Chrome with ML API */}
+              {webnnAvailable && <option value="webnn">{t('aiConfig.webnn')}</option>}
               <option value="wasm">{t('aiConfig.wasm')}</option>
             </select>
           </div>
+
+          {/* Batch Size - visible when WebGPU or WebNN is selected */}
+          {(aiSettings.backend === 'webgpu' || aiSettings.backend === 'webnn') && (
+            <div className="setting-item setting-item-full">
+              <div className="setting-info">
+                <label htmlFor="webgpu-batch-slider" className="setting-label">
+                  {t('aiConfig.webgpuBatchSize')}
+                  <span className="setting-value">{aiSettings.webgpuBatchSize}</span>
+                </label>
+                <p className="setting-description">{t('aiConfig.webgpuBatchSizeDescription')}</p>
+              </div>
+              <input
+                id="webgpu-batch-slider"
+                type="range"
+                min="1"
+                max="16"
+                step="1"
+                value={aiSettings.webgpuBatchSize}
+                onChange={e => setAISettings({ webgpuBatchSize: parseInt(e.target.value) })}
+                className="ai-slider"
+              />
+            </div>
+          )}
 
           {/* Max Top Moves - Left column */}
           <div className="setting-item">
@@ -520,6 +566,27 @@ export const KayaConfig: React.FC = () => {
               step="0.01"
               value={aiSettings.minProb}
               onChange={e => setAISettings({ minProb: parseFloat(e.target.value) })}
+              className="ai-slider"
+            />
+          </div>
+
+          {/* Search Visits - Full width */}
+          <div className="setting-item setting-item-full">
+            <div className="setting-info">
+              <label htmlFor="num-visits-slider" className="setting-label">
+                {t('aiConfig.numVisits')}
+                <span className="setting-value">{aiSettings.numVisits}</span>
+              </label>
+              <p className="setting-description">{t('aiConfig.numVisitsDescription')}</p>
+            </div>
+            <input
+              id="num-visits-slider"
+              type="range"
+              min="1"
+              max="400"
+              step="1"
+              value={aiSettings.numVisits}
+              onChange={e => setAISettings({ numVisits: parseInt(e.target.value) })}
               className="ai-slider"
             />
           </div>

@@ -9,6 +9,13 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import type { Engine } from '@kaya/ai-engine';
+import {
+  convertModelForWebGPU,
+  isWebGPUOptimized,
+  WEBGPU_BATCH_SIZE,
+  convertModelForWebNN,
+  isWebNNOptimized,
+} from '@kaya/ai-engine';
 import { useGameTree } from './GameTreeContext';
 import { isTauriApp } from '../services/fileSave';
 import { loadModelData } from '../services/modelStorage';
@@ -17,7 +24,12 @@ import { createEngine, type CreateEngineOptions } from '../workers/engineFactory
 // Global state for singleton engine management
 let globalEngineInstance: Engine | null = null;
 let globalEnginePromise: Promise<Engine> | null = null;
-let globalEngineConfig: { modelName: string; backend: string } | null = null;
+let globalEngineConfig: {
+  modelName: string;
+  backend: string;
+  webgpuBatchSize: number;
+  boardSize: number;
+} | null = null;
 
 export interface AIEngineContextValue {
   /** The AI engine instance, or null if not initialized */
@@ -57,8 +69,9 @@ export function useAIEngineOptional(): AIEngineContextValue | null {
 }
 
 export const AIEngineProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { customAIModel, isModelLoaded, aiSettings, setAISettings, setAIConfigOpen } =
+  const { customAIModel, isModelLoaded, aiSettings, setAISettings, setAIConfigOpen, gameInfo } =
     useGameTree();
+  const boardSize = gameInfo?.boardSize ?? 19;
 
   const [engine, setEngine] = useState<Engine | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
@@ -95,12 +108,16 @@ export const AIEngineProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const currentConfig = {
       modelName: customAIModel?.name || 'default',
       backend: aiSettings.backend,
+      webgpuBatchSize: aiSettings.webgpuBatchSize,
+      boardSize,
     };
 
     const configChanged =
       !globalEngineConfig ||
       globalEngineConfig.modelName !== currentConfig.modelName ||
-      globalEngineConfig.backend !== currentConfig.backend;
+      globalEngineConfig.backend !== currentConfig.backend ||
+      globalEngineConfig.webgpuBatchSize !== currentConfig.webgpuBatchSize ||
+      globalEngineConfig.boardSize !== currentConfig.boardSize;
 
     // Reuse existing instance if config matches
     if (globalEngineInstance && !configChanged) {
@@ -162,9 +179,66 @@ export const AIEngineProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
           const isTauri = isTauriApp();
 
+          // Auto-convert model for WebGPU if needed
+          const isWebGPU = aiSettings.backend === 'webgpu';
+          const isWebNN = aiSettings.backend === 'webnn';
+          const modelName = customAIModel?.name || '';
+          const alreadyConverted = isWebGPUOptimized(modelName);
+          const alreadyWebNNConverted = isWebNNOptimized(modelName);
+          let isAutoConverted = false;
+          let isWebNNAutoConverted = false;
+
+          if (isWebGPU && !alreadyConverted && !isTauri) {
+            try {
+              const batchSize = aiSettings.webgpuBatchSize || 8;
+              console.log(`[AIEngine] Auto-converting model for WebGPU (batch=${batchSize})...`);
+              const result = await convertModelForWebGPU(buffer, { batchSize });
+              if (result.wasConverted) {
+                buffer = result.buffer;
+                isAutoConverted = true;
+                console.log(`[AIEngine] Model converted: ${result.changes.join(', ')}`);
+              }
+            } catch (err) {
+              console.warn('[AIEngine] Auto-conversion failed, using original model:', err);
+            }
+          }
+
+          if (isWebNN && !alreadyWebNNConverted && !isTauri) {
+            try {
+              const webnnBatch = aiSettings.webgpuBatchSize || WEBGPU_BATCH_SIZE;
+              console.log(`[AIEngine] Auto-converting model for WebNN (batch=${webnnBatch})...`);
+              const result = await convertModelForWebNN(buffer, {
+                batchSize: webnnBatch,
+                boardSize,
+              });
+              if (result.wasConverted) {
+                buffer = result.buffer;
+                isWebNNAutoConverted = true;
+                console.log(`[AIEngine] WebNN model converted (${result.changes.length} changes)`);
+              }
+            } catch (err) {
+              console.warn('[AIEngine] WebNN auto-conversion failed, using original model:', err);
+            }
+          }
+
           // Determine engine type based on backend setting
           let engineType: CreateEngineOptions['engineType'] = 'web';
-          if (isTauri && (aiSettings.backend === 'native' || aiSettings.backend === 'native-cpu')) {
+          if (isTauri && aiSettings.backend === 'pytorch') {
+            engineType = 'pytorch';
+          } else if (isTauri && aiSettings.backend === 'native') {
+            // "native" = auto for desktop: prefer PyTorch GPU if available, then ONNX
+            try {
+              const { isPyTorchAvailable } = await import('@kaya/ai-engine/pytorch-tauri-engine');
+              if (await isPyTorchAvailable()) {
+                console.log('[AIEngine] PyTorch GPU available, using it for native backend');
+                engineType = 'pytorch';
+              } else {
+                engineType = 'native';
+              }
+            } catch {
+              engineType = 'native';
+            }
+          } else if (isTauri && aiSettings.backend === 'native-cpu') {
             engineType = 'native';
           }
 
@@ -181,11 +255,45 @@ export const AIEngineProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           }
 
           // Determine execution providers for web engine
-          let executionProviders: string[];
+          let executionProviders: (string | Record<string, unknown>)[];
+          let enableGraphCapture = false;
+          // Detect static batch size from model name or auto-conversion
+          let staticBatchSize: number | undefined;
+          const batchMatch = modelName.match(/static-b(\d+)/);
+          if (batchMatch) {
+            staticBatchSize = parseInt(batchMatch[1], 10);
+          } else if (isAutoConverted) {
+            staticBatchSize = aiSettings.webgpuBatchSize || WEBGPU_BATCH_SIZE;
+          } else if (isWebNNAutoConverted || alreadyWebNNConverted || isWebNN) {
+            // WebNN uses the same batch size as WebGPU for batched inference.
+            // Benchmarks show batch=4 gives ~4x per-move throughput improvement.
+            staticBatchSize = aiSettings.webgpuBatchSize || WEBGPU_BATCH_SIZE;
+          } else if (modelName.includes('.webgpu.')) {
+            // Legacy pre-converted models default to batch=1
+            staticBatchSize = 1;
+          }
           if (aiSettings.backend === 'webgpu') {
             executionProviders = ['webgpu', 'wasm'];
+            // Enable graph capture for converted models (pre-converted or auto-converted).
+            // Graph capture + GPU IO binding eliminates per-op dispatch overhead.
+            if (modelName.includes('.webgpu.') || isAutoConverted) {
+              enableGraphCapture = true;
+            }
+          } else if (aiSettings.backend === 'webnn') {
+            executionProviders = [
+              { name: 'webnn', deviceType: 'gpu', powerPreference: 'high-performance' },
+              'wasm',
+            ];
           } else {
             executionProviders = ['wasm'];
+          }
+
+          // URL parameter override for GPU memory benchmarking:
+          //   ?gc=0  → disable graph capture (keep WebGPU + static batch)
+          const urlParams = new URLSearchParams(window.location.search);
+          if (urlParams.get('gc') === '0') {
+            enableGraphCapture = false;
+            console.log('[AIEngine][benchmark] Graph capture DISABLED via ?gc=0');
           }
 
           const newEngine = await createEngine(
@@ -195,7 +303,10 @@ export const AIEngineProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               executionProvider: aiSettings.backend === 'native-cpu' ? 'cpu' : 'auto',
               engineType,
               wasmPath,
-              executionProviders,
+              executionProviders: executionProviders as string[],
+              enableGraphCapture,
+              staticBatchSize,
+              boardSize,
               maxMoves: 10,
               enableCache: true,
               numThreads: Math.min(8, navigator.hardwareConcurrency || 4),
@@ -251,7 +362,15 @@ export const AIEngineProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setIsInitializing(false);
       initializationTriggeredRef.current = false;
     }
-  }, [customAIModel, isModelLoaded, aiSettings.backend, setAIConfigOpen, setAISettings]);
+  }, [
+    customAIModel,
+    isModelLoaded,
+    aiSettings.backend,
+    aiSettings.webgpuBatchSize,
+    boardSize,
+    setAIConfigOpen,
+    setAISettings,
+  ]);
 
   // Auto-initialize when model becomes available
   useEffect(() => {
@@ -260,15 +379,30 @@ export const AIEngineProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [isModelLoaded, customAIModel, engine, isInitializing, error, initializeEngine]);
 
-  // Re-initialize when backend changes (if we already have an engine)
+  // Re-initialize when backend, batch size, or board size changes (if we already have an engine)
   useEffect(() => {
     if (engine && globalEngineConfig) {
       const currentBackend = aiSettings.backend;
-      if (globalEngineConfig.backend !== currentBackend) {
+      const currentBatch = aiSettings.webgpuBatchSize;
+      if (
+        globalEngineConfig.backend !== currentBackend ||
+        globalEngineConfig.webgpuBatchSize !== currentBatch ||
+        globalEngineConfig.boardSize !== boardSize
+      ) {
         initializeEngine();
       }
     }
-  }, [aiSettings.backend, engine, initializeEngine]);
+  }, [aiSettings.backend, aiSettings.webgpuBatchSize, boardSize, engine, initializeEngine]);
+
+  // Re-initialize when model changes (if we already have an engine)
+  useEffect(() => {
+    if (engine && globalEngineConfig && customAIModel) {
+      const currentModelName = customAIModel.name || 'default';
+      if (globalEngineConfig.modelName !== currentModelName) {
+        initializeEngine();
+      }
+    }
+  }, [customAIModel, engine, initializeEngine]);
 
   const value: AIEngineContextValue = {
     engine,

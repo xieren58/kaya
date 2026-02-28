@@ -10,6 +10,7 @@
 
 import { type Engine, type OnnxEngineConfig } from '@kaya/ai-engine';
 import { TauriEngine } from '@kaya/ai-engine/tauri-engine';
+import { PyTorchTauriEngine } from '@kaya/ai-engine/pytorch-tauri-engine';
 import { WorkerEngine } from './WorkerEngine';
 
 /**
@@ -62,10 +63,20 @@ export interface CreateEngineOptions {
   /**
    * Force using a specific engine type
    * - 'native': Use TauriEngine (only works in Tauri)
+   * - 'pytorch': Use PyTorch GPU sidecar (Linux with ROCm/CUDA, Tauri only)
    * - 'web': Use WorkerEngine (works everywhere)
    * - 'auto': Auto-detect based on environment (default)
    */
-  engineType?: 'native' | 'web' | 'auto';
+  engineType?: 'native' | 'pytorch' | 'web' | 'auto';
+
+  /** Enable WebGPU graph capture for static-shape models */
+  enableGraphCapture?: boolean;
+
+  /** Static batch size of the model (1 for static-b1 models) */
+  staticBatchSize?: number;
+
+  /** Board size for WebNN freeDimensionOverrides (default: 19) */
+  boardSize?: number;
 
   /** Progress callback for native engine model upload (Tauri only) */
   onProgress?: (progress: { stage: string; progress: number; message: string }) => void;
@@ -86,8 +97,28 @@ export async function createEngine(
 
   // Determine which engine to use
   const useNative = engineType === 'native' || (engineType === 'auto' && isTauriContext());
+  const usePyTorch = engineType === 'pytorch';
 
-  if (useNative) {
+  if (usePyTorch) {
+    if (!isTauriContext()) {
+      throw new Error('PyTorchTauriEngine is only available in Tauri desktop apps');
+    }
+
+    console.log('[createEngine] Using PyTorchTauriEngine (GPU sidecar)');
+
+    const engine = new PyTorchTauriEngine({
+      modelBuffer: options.modelBuffer,
+      modelPath: options.modelPath,
+      modelId: options.modelId,
+      enableCache: options.enableCache ?? true,
+      maxMoves: options.maxMoves ?? 10,
+      debug: options.debug,
+      onProgress: options.onProgress,
+    });
+
+    await engine.initialize();
+    return engine;
+  } else if (useNative) {
     // Use native Tauri engine - dynamically import to avoid loading in workers
     if (!isTauriContext()) {
       throw new Error('TauriEngine is only available in Tauri desktop apps');
@@ -129,6 +160,9 @@ export async function createEngine(
       enableCache: options.enableCache ?? true,
       maxMoves: options.maxMoves ?? 10,
       debug: options.debug,
+      enableGraphCapture: options.enableGraphCapture,
+      staticBatchSize: options.staticBatchSize,
+      boardSize: options.boardSize,
     };
 
     const engine = new WorkerEngine(worker, config);
