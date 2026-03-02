@@ -60,6 +60,10 @@ ort = { version = "2.0.0-rc.11", default-features = false, features = ["load-dyn
 # Note: reqwest is NOT included for Android to avoid OpenSSL/ring compilation issues
 # HTTP requests on Android should be done via the frontend/WebView
 
+# Deny all warnings to enforce clean builds
+[lints.rust]
+unused = "deny"
+
 # Optimize release builds for smaller binary and faster CI
 [profile.release]
 # Enable LTO for smaller binary (thin is faster than full LTO)

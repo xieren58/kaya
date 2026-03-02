@@ -345,14 +345,6 @@ pub struct BenchmarkResult {
     pub batch8_inf_s: f64,
 }
 
-/// Check if the engine is initialized
-pub fn is_initialized() -> bool {
-    ENGINE
-        .lock()
-        .map(|e| e.is_some())
-        .unwrap_or(false)
-}
-
 /// Dispose the engine
 pub fn dispose_engine() -> Result<(), String> {
     let mut global = ENGINE.lock().map_err(|e| e.to_string())?;

@@ -1,5 +1,3 @@
-extern crate wasm_bindgen;
-
 mod rand;
 mod deadstones;
 mod pseudo_board;

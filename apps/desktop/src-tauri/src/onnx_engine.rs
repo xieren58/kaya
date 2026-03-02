@@ -999,6 +999,7 @@ struct OnnxOutputs {
 // === Standalone featurization and result processing (used by PyTorch engine too) ===
 
 /// Determine next player from sign map and options
+#[cfg(target_os = "linux")]
 pub fn determine_next_player(sign_map: &[Vec<i8>], options: &AnalysisOptions) -> i8 {
     match &options.next_to_play {
         Some(s) if s == "W" => -1,
@@ -1017,6 +1018,7 @@ pub fn determine_next_player(sign_map: &[Vec<i8>], options: &AnalysisOptions) ->
 }
 
 /// Compute liberties for each position on the board (standalone version)
+#[cfg(target_os = "linux")]
 pub fn compute_liberties_standalone(sign_map: &[Vec<i8>]) -> Vec<Vec<usize>> {
     let size = sign_map.len();
     let mut liberties = vec![vec![0usize; size]; size];
@@ -1067,6 +1069,7 @@ pub fn compute_liberties_standalone(sign_map: &[Vec<i8>]) -> Vec<Vec<usize>> {
 }
 
 /// Featurize a board position into neural network inputs (standalone, no engine needed)
+#[cfg(target_os = "linux")]
 pub fn featurize_position(
     sign_map: &[Vec<i8>],
     pla: i8,
@@ -1123,6 +1126,7 @@ pub fn featurize_position(
 }
 
 /// Process raw inference outputs into AnalysisResult (standalone, no engine needed)
+#[cfg(target_os = "linux")]
 pub fn process_raw_outputs(
     policy: &[f32],
     value: &[f32],
