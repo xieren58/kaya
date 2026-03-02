@@ -210,7 +210,8 @@
     min-width: 0;
   }
 
-  .header-toggles {
-    display: none;
+  /* Hide desktop-only toggles; keep theme & sound visible */
+  .header-desktop-toggle {
+    display: none !important;
   }
 }

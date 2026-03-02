@@ -37,6 +37,13 @@
   padding: 10px;
 }
 
+/* Reduce board padding on mobile to maximize board size */
+@media (max-width: 1024px) {
+  .gameboard-board-wrapper {
+    padding: 2px;
+  }
+}
+
 /* Remove padding when coordinates are hidden to maximize board space */
 .gameboard-board-wrapper.no-coordinates {
   padding: 0;

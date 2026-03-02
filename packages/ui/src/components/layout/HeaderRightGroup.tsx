@@ -62,7 +62,7 @@ export const HeaderRightGroup: React.FC<HeaderRightGroupProps> = ({
         <div className="header-toggles">
           {onToggleLibrary && (
             <button
-              className={`panel-toggle ${showLibrary ? 'active' : ''}`}
+              className={`panel-toggle header-desktop-toggle ${showLibrary ? 'active' : ''}`}
               onClick={onToggleLibrary}
               title={showLibrary ? `${t('hideLibrary')} (Ctrl+L)` : `${t('showLibrary')} (Ctrl+L)`}
             >
@@ -71,7 +71,7 @@ export const HeaderRightGroup: React.FC<HeaderRightGroupProps> = ({
           )}
           {onToggleSidebar && (
             <button
-              className={`panel-toggle ${showSidebar ? 'active' : ''}`}
+              className={`panel-toggle header-desktop-toggle ${showSidebar ? 'active' : ''}`}
               onClick={onToggleSidebar}
               title={showSidebar ? `${t('hideSidebar')} (Ctrl+B)` : `${t('showSidebar')} (Ctrl+B)`}
             >
@@ -80,7 +80,7 @@ export const HeaderRightGroup: React.FC<HeaderRightGroupProps> = ({
           )}
           <GamepadIndicator />
           <button
-            className="fullscreen-toggle"
+            className="fullscreen-toggle header-desktop-toggle"
             onClick={toggleFullscreen}
             title={
               isFullscreen
@@ -108,8 +108,11 @@ export const HeaderRightGroup: React.FC<HeaderRightGroupProps> = ({
           >
             {soundEnabled ? <LuVolume2 size={20} /> : <LuVolumeX size={20} />}
           </button>
-          <LanguageSwitcher />
+          <span className="header-desktop-toggle">
+            <LanguageSwitcher />
+          </span>
           <a
+            className="header-desktop-toggle"
             href="https://github.com/kaya-go/kaya"
             target="_blank"
             rel="noopener noreferrer"
@@ -119,6 +122,7 @@ export const HeaderRightGroup: React.FC<HeaderRightGroupProps> = ({
           </a>
           {onHide && (
             <button
+              className="header-desktop-toggle"
               onClick={onHide}
               title={`${t('hideMenu')} (${bindingToDisplayString(getBinding('view.toggleHeader'))})`}
             >
