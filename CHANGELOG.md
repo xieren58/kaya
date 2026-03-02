@@ -2,6 +2,62 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-03-02
+
+### <!-- 0 -->🚀 Features
+
+- Ai inference improvements, board recognition, CPU usage fixes, and new backends ([#50](https://github.com/kaya-go/kaya/issues/50)) by @Aitai
+
+- *(board-recognition)* Add moku AI detection backend with RT-DETR ([#67](https://github.com/kaya-go/kaya/issues/67)) by @hadim
+
+- *(board-recognition)* Enhance Moku AI detector with caching, progress tracking, and optimized pipeline ([#68](https://github.com/kaya-go/kaya/issues/68)) by @hadim
+
+- *(ui)* Add overflow menu system and scan board option ([#72](https://github.com/kaya-go/kaya/issues/72)) by @hadim
+
+### <!-- 1 -->🐛 Bug Fixes
+
+- *(ci)* Use new tauri appimage format for linux builds ([c37b221](https://github.com/kaya-go/kaya/commit/c37b221a619febf75f080b23b54ded86406551fa)) by @hadim
+
+- *(nightly)* Add --force to cargo install tauri-cli on Linux ([#49](https://github.com/kaya-go/kaya/issues/49)) by @Copilot
+
+- Align dependabot labels with existing repo label convention ([#53](https://github.com/kaya-go/kaya/issues/53)) by @Copilot
+
+- Update ort API calls for 2.0.0-rc.11 compatibility ([#62](https://github.com/kaya-go/kaya/issues/62)) by @Copilot
+
+- Call .commit() on ort::init() to fix Android CI compilation ([#65](https://github.com/kaya-go/kaya/issues/65)) by @Copilot
+
+- Switch macOS build from universal to aarch64-apple-darwin ([#73](https://github.com/kaya-go/kaya/issues/73)) by @Copilot
+
+### <!-- 2 -->🚜 Refactor
+
+- Reduce file sizes across the codebase for improved maintainability ([#71](https://github.com/kaya-go/kaya/issues/71)) by @hadim
+
+### <!-- 7 -->⚙️ Miscellaneous Tasks
+
+- *(ci)* Bump actions/setup-java from 4 to 5 ([#45](https://github.com/kaya-go/kaya/issues/45)) by @dependabot[bot]
+
+- Exclude cla-signatures.json from prettier check ([#52](https://github.com/kaya-go/kaya/issues/52)) by @Copilot
+
+- *(ci)* Bump actions/download-artifact from 7 to 8 ([#55](https://github.com/kaya-go/kaya/issues/55)) by @dependabot[bot]
+
+- *(ci)* Bump actions/upload-artifact from 6 to 7 ([#54](https://github.com/kaya-go/kaya/issues/54)) by @dependabot[bot]
+
+- Update ort to 2.0.0-rc.11 ([#60](https://github.com/kaya-go/kaya/issues/60)) by @Copilot
+
+- Skip PR title check for draft PRs ([#63](https://github.com/kaya-go/kaya/issues/63)) by @Copilot
+
+- Skip CLA and welcome message for copilot bot PRs ([#64](https://github.com/kaya-go/kaya/issues/64)) by @Copilot
+
+- Fix release Linux build failing on cargo install tauri-cli ([#74](https://github.com/kaya-go/kaya/issues/74)) by @Copilot
+
+### 🙏 Contributors
+
+- @Copilot *(first contribution)* 🎉
+- @hadim
+- @dependabot[bot]
+- @Aitai *(first contribution)* 🎉
+- @github-actions[bot]
+
 ## [0.2.4] - 2026-01-03
 
 ### <!-- 0 -->🚀 Features
@@ -21,6 +77,12 @@ All notable changes to this project will be documented in this file.
 ### <!-- 6 -->🧪 Testing
 
 - Add e2e tests for desktop app ([f7ccfe9](https://github.com/kaya-go/kaya/commit/f7ccfe9df22448c55340265d9f325e5da55b488c)) by @hadim
+
+### <!-- 7 -->⚙️ Miscellaneous Tasks
+
+- Exclude GitHub Actions bot from contributors list ([556bb51](https://github.com/kaya-go/kaya/commit/556bb51b7845fcacf84f5fa81ebc10bb63af36bb)) by @hadim
+
+- Release v0.2.4 ([8f88b67](https://github.com/kaya-go/kaya/commit/8f88b67d19ebfc7fe9bd9f3bd3599e3e947c870f)) by @github-actions[bot]
 
 ### 🙏 Contributors
 
